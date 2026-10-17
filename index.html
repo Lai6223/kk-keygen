@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>KK 激活码</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#151938;--mut:#6b7080;--acc:#D34449;--bd:#e3e5ea}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111318;--card:#1b1e25;--fg:#eceef3;--mut:#9aa0ad;--bd:#2c3039}}
+:root[data-theme="dark"]{--bg:#111318;--card:#1b1e25;--fg:#eceef3;--mut:#9aa0ad;--bd:#2c3039}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif;display:flex;justify-content:center;padding:40px 16px}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:28px;max-width:420px;width:100%}
+h1{font-size:20px;margin:0 0 4px}p{color:var(--mut);margin:0 0 20px;font-size:14px}
+label{font-size:14px;color:var(--mut)}
+input{width:100%;font:600 22px/1 ui-monospace,Menlo,Consolas,monospace;padding:12px 14px;margin:6px 0 16px;border:1px solid var(--bd);border-radius:10px;background:transparent;color:var(--fg)}
+#id{font-size:28px;letter-spacing:6px;text-transform:uppercase}
+.out{font:700 40px/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:8px;color:var(--acc);padding:16px 0 6px;min-height:62px}
+button{border:0;background:var(--acc);color:#fff;font-size:15px;padding:10px 18px;border-radius:10px;cursor:pointer}
+.err{color:var(--acc);font-size:14px;min-height:20px}.row{display:flex;gap:10px;align-items:center;margin-bottom:14px;font-size:14px;color:var(--mut)}
+.hide{display:none}
+</style></head><body><div class="c">
+<h1>KK 激活码生成器</h1>
+<div id="lock">
+  <p>请输入口令解锁（密钥已加密，仅在本机解密）。</p>
+  <label for="pw">口令</label>
+  <input id="pw" type="password" autocomplete="current-password">
+  <div class="row"><input id="rem" type="checkbox" style="width:auto;margin:0"><label for="rem">在这台设备上记住</label></div>
+  <button id="unlock">解锁</button>
+  <div class="err" id="perr"></div>
+</div>
+<div id="gen" class="hide">
+  <p>输入手表上显示的 4 位设备 ID。</p>
+  <label for="id">设备 ID</label>
+  <input id="id" maxlength="4" autocomplete="off" placeholder="3F9A">
+  <label>激活码</label>
+  <div class="out" id="out">——</div>
+  <div class="err" id="err"></div>
+  <button id="copy">复制激活码</button>
+  <button id="lockbtn" style="background:transparent;color:var(--mut)">锁定</button>
+</div>
+</div>
+<script>
+const BLOB = {"salt": "ZzyNZaINJID/li46YVCugQ==", "iv": "NDDdt17esrP6IsHR", "ct": "2R7ubBagUYMVntg6GlObokpC3QmU7YHtJ7wH9lwiacIh+Hs=", "it": 250000};
+let SECRET = null;
+const $ = id => document.getElementById(id);
+const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function decrypt(pw){
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  const key = await crypto.subtle.deriveKey({name:"PBKDF2", salt:b64(BLOB.salt), iterations:BLOB.it, hash:"SHA-256"}, base, {name:"AES-GCM", length:256}, false, ["decrypt"]);
+  const pt = await crypto.subtle.decrypt({name:"AES-GCM", iv:b64(BLOB.iv)}, key, b64(BLOB.ct));
+  return new TextDecoder().decode(pt);
+}
+function kkCode(id){
+  let h = 0x811C9DC5;
+  for (const b of new TextEncoder().encode(SECRET + ":" + id)) { h = Math.imul(h ^ b, 0x01000193) >>> 0; }
+  h = (h ^ (h >>> 16)) >>> 0; h = Math.imul(h, 0x85EBCA6B) >>> 0;
+  h = (h ^ (h >>> 13)) >>> 0; h = Math.imul(h, 0xC2B2AE35) >>> 0;
+  h = (h ^ (h >>> 16)) >>> 0;
+  return String(h % 1000000).padStart(6, "0");
+}
+function show(){ $("lock").classList.add("hide"); $("gen").classList.remove("hide"); $("id").focus(); }
+async function tryUnlock(pw, remember){
+  try { SECRET = await decrypt(pw); } catch(e) { $("perr").textContent = "口令不正确"; return false; }
+  if (remember) { try { localStorage.setItem("kkpw", pw); } catch(e) {} }
+  show(); return true;
+}
+$("unlock").onclick = () => tryUnlock($("pw").value, $("rem").checked);
+$("pw").addEventListener("keydown", e => { if (e.key === "Enter") $("unlock").click(); });
+$("lockbtn").onclick = () => { SECRET = null; try { localStorage.removeItem("kkpw"); } catch(e) {} location.reload(); };
+$("id").addEventListener("input", () => {
+  const v = $("id").value.trim().toUpperCase();
+  if (/^[0-9A-F]{4}$/.test(v)) { $("out").textContent = kkCode(v); $("err").textContent = ""; }
+  else { $("out").textContent = "——"; $("err").textContent = v.length === 4 ? "ID 只包含 0-9 和 A-F" : ""; }
+});
+$("copy").onclick = () => { const t = $("out").textContent; if (/^\d{6}$/.test(t) && navigator.clipboard) navigator.clipboard.writeText(t); };
+(async () => { let pw = null; try { pw = localStorage.getItem("kkpw"); } catch(e) {} if (pw) await tryUnlock(pw, false); })();
+</script></body></html>
